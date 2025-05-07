@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Phone Sensor Stream</title>
+</head>
+<body>
+  <h2>📡 Streaming Phone Sensor Data to Firebase...</h2>
+  <p id="status">Waiting for movement or GPS...</p>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
+    import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCYIe5JgE2no4p0y2yizi45YR3SRCMuALc",
+      authDomain: "collison-detection.firebaseapp.com",
+      projectId: "collison-detection",
+      storageBucket: "collison-detection.firebasestorage.app",
+      messagingSenderId: "641627450099",
+      appId: "1:641627450099:web:b13aa313767f622a17a586",
+      measurementId: "G-SFGL94K4YF"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const statusText = document.getElementById("status");
+
+    let latestAccel = null;
+    let latestGyro = null;
+    let latestLoc = null;
+
+    function sendMergedData() {
+      if (latestAccel && latestGyro && latestLoc) {
+        const data = {
+          timestamp: new Date().toISOString(),
+          acceleration: latestAccel,
+          gyroscope: latestGyro,
+          location: latestLoc,
+          speed: latestLoc.speed ?? 0
+        };
+        addDoc(collection(db, "incidents"), data).then(() => {
+          statusText.textContent = `📨 Sent at ${new Date().toLocaleTimeString()}`;
+        });
+      }
+    }
+
+    // Save latest acceleration + gyro
+    window.addEventListener("devicemotion", (event) => {
+      const { acceleration, rotationRate } = event;
+      if (acceleration && rotationRate) {
+        latestAccel = {
+          x: acceleration.x ?? 0,
+          y: acceleration.y ?? 0,
+          z: acceleration.z ?? 0
+        };
+        latestGyro = {
+          x: rotationRate.alpha ?? 0,
+          y: rotationRate.beta ?? 0,
+          z: rotationRate.gamma ?? 0
+        };
+      }
+    });
+
+    // Save latest GPS location
+    navigator.geolocation.watchPosition(
+      (pos) => {
+        latestLoc = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          speed: pos.coords.speed ?? 0
+        };
+      },
+      (err) => {
+        console.error("Geolocation error:", err);
+        statusText.textContent = "❌ GPS error. Check permissions.";
+      },
+      { enableHighAccuracy: true }
+    );
+
+    // Send merged data every second
+    setInterval(sendMergedData, 1000);
+  </script>
+</body>
+</html>
